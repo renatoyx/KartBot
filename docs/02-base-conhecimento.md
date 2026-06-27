@@ -2,54 +2,88 @@
 
 ## Dados Utilizados
 
-Descreva se usou os arquivos da pasta `data`, por exemplo:
+O KartBot usa a pasta `data/` como base local de conhecimento. A proposta é manter o agente restrito a fontes controladas, rastreáveis e fáceis de auditar.
 
 | Arquivo | Formato | Utilização no Agente |
-|---------|---------|---------------------|
-| `historico_atendimento.csv` | CSV | Contextualizar interações anteriores |
-| `perfil_investidor.json` | JSON | Personalizar recomendações |
-| `produtos_financeiros.json` | JSON | Sugerir produtos adequados ao perfil |
-| `transacoes.csv` | CSV | Analisar padrão de gastos do cliente |
-
-> [!TIP]
-> **Quer um dataset mais robusto?** Você pode utilizar datasets públicos do [Hugging Face](https://huggingface.co/datasets) relacionados a finanças, desde que sejam adequados ao contexto do desafio.
-
----
+|---------|---------|----------------------|
+| `produtos_financeiros.json` | JSON | Armazena produtos monitorados no mercado, preço médio calculado e data de coleta |
+| `transacoes.csv` | CSV | Registra o histórico financeiro do piloto ou equipe, incluindo entradas e saídas |
+| `perfil_investidor.json` | JSON | Mantido como dado legado do desafio original, sem uso principal no KartBot |
+| `historico_atendimento.csv` | CSV | Mantido como dado legado do desafio original, sem uso principal no KartBot |
 
 ## Adaptações nos Dados
 
-> Você modificou ou expandiu os dados mockados? Descreva aqui.
+O arquivo `produtos_financeiros.json` foi reaproveitado como base de preços de mercado para produtos de kart. A coleta é feita pelo script `src/google_shopping_scraper.py`, que busca itens no Google Shopping, extrai valores monetários dos resultados com Regex e calcula o preço médio por produto.
 
-[Sua descrição aqui]
+O arquivo `transacoes.csv` é a base para análise de gastos. Ele contém campos simples e auditáveis:
 
----
+```text
+data,descricao,categoria,valor,tipo
+```
+
+Essa estrutura permite calcular saídas mensais, consultar despesas por categoria e identificar gastos operacionais, como manutenção e inscrição.
 
 ## Estratégia de Integração
 
 ### Como os dados são carregados?
-> Descreva como seu agente acessa a base de conhecimento.
 
-[ex: Os JSON/CSV são carregados no início da sessão e incluídos no contexto do prompt]
+Os dados são acessados pela camada DAO em `src/dao.py`.
+
+`ProdutoDAO` lê o JSON e converte os registros para objetos tipados `ProdutoMercado`. `TransacaoDAO` lê o CSV e converte cada linha para objetos tipados `Transacao`.
+
+Essa separação evita que a interface Streamlit conheça detalhes de leitura de arquivos, parsing de JSON ou parsing de CSV.
 
 ### Como os dados são usados no prompt?
-> Os dados vão no system prompt? São consultados dinamicamente?
 
-[Sua descrição aqui]
+A aplicação `src/app.py` carrega os dados por meio dos DAOs no início da sessão e monta um contexto textual autorizado para o modelo. Esse contexto é enviado como mensagem de sistema junto com o system prompt do KartBot.
 
----
+O modelo recebe:
+
+- lista de produtos e preços médios do JSON;
+- lista de transações do CSV;
+- total de despesas de inscrição encontrado no CSV;
+- instrução explícita para não usar dados externos.
 
 ## Exemplo de Contexto Montado
 
-> Mostre um exemplo de como os dados são formatados para o agente.
+```text
+Contexto autorizado para resposta:
+Produtos do JSON: [
+  {
+    "nome_produto": "Pneu de kart MG vermelho",
+    "preco_medio": 720.00,
+    "data_coleta": "2026-06-26T20:30:00"
+  }
+]
 
-```
-Dados do Cliente:
-- Nome: João Silva
-- Perfil: Moderado
-- Saldo disponível: R$ 5.000
+Transacoes do CSV: [
+  {
+    "data": "2026-06-10",
+    "descricao": "Inscrição etapa regional",
+    "categoria": "inscricao",
+    "valor": 350.00,
+    "tipo": "saida"
+  },
+  {
+    "data": "2026-06-12",
+    "descricao": "Revisão do motor",
+    "categoria": "manutencao",
+    "valor": 900.00,
+    "tipo": "saida"
+  }
+]
 
-Últimas transações:
-- 01/11: Supermercado - R$ 450
-- 03/11: Streaming - R$ 55
-...
+Total de despesas de inscricao no CSV: 350.00
+Nao use dados externos, estimativas livres ou conhecimento de mercado fora do contexto acima.
 ```
+
+## Governança dos Dados
+
+O KartBot foi projetado para favorecer rastreabilidade. Toda resposta financeira deve poder ser explicada por um registro presente no JSON ou no CSV. Se o dado não existir, o agente deve informar a limitação em vez de inventar um valor.
+
+Para melhorar a qualidade da base, recomenda-se:
+
+- atualizar o JSON periodicamente com o scraper;
+- padronizar categorias no CSV, como `inscricao`, `manutencao`, `pneus`, `combustivel` e `transporte`;
+- registrar todas as saídas com data, descrição, categoria, valor e tipo;
+- revisar os resultados do scraper quando o Google Shopping retornar anúncios irrelevantes.

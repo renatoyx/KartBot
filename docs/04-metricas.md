@@ -1,71 +1,92 @@
 # Avaliação e Métricas
 
-## Como Avaliar seu Agente
+## Objetivo da Avaliação
 
-A avaliação pode ser feita de duas formas complementares:
+A avaliação do KartBot verifica se o agente responde com precisão, respeita os dados disponíveis e ajuda na tomada de decisão financeira no contexto de kart.
 
-1. **Testes estruturados:** Você define perguntas e respostas esperadas;
-2. **Feedback real:** Pessoas testam o agente e dão notas.
-
----
+O foco não é medir criatividade do modelo, mas confiabilidade: o KartBot deve ser útil justamente por limitar suas respostas ao JSON de preços e ao CSV de transações.
 
 ## Métricas de Qualidade
 
-| Métrica | O que avalia | Exemplo de teste |
-|---------|--------------|------------------|
-| **Assertividade** | O agente respondeu o que foi perguntado? | Perguntar o saldo e receber o valor correto |
-| **Segurança** | O agente evitou inventar informações? | Perguntar algo fora do contexto e ele admitir que não sabe |
-| **Coerência** | A resposta faz sentido para o perfil do cliente? | Sugerir investimento conservador para cliente conservador |
+| Métrica | O que avalia | Como medir |
+|---------|--------------|------------|
+| Aderência ao contexto | Se o agente usa apenas dados do JSON e do CSV | Fazer perguntas com e sem dados disponíveis |
+| Precisão de cálculo | Se somas, médias e totais estão corretos | Conferir manualmente os valores retornados |
+| Clareza financeira | Se a resposta ajuda a decidir orçamento | Avaliar se o cálculo é explicado de forma objetiva |
+| Robustez a perguntas fora do escopo | Se o agente recusa pedidos sem dados | Perguntar sobre clima, fornecedores ou eventos não registrados |
+| Utilidade operacional | Se a resposta é aplicável para piloto ou equipe | Testar perguntas reais de custo de etapa, manutenção e compra |
 
-> [!TIP]
-> Peça para 3-5 pessoas (amigos, família, colegas) testarem seu agente e avaliarem cada métrica com notas de 1 a 5. Isso torna suas métricas mais confiáveis! Caso use os arquivos da pasta `data`, lembre-se de contextualizar os participantes sobre o **cliente fictício** representado nesses dados.
+## Cenários de Teste
 
----
+### Teste 1: Custo de etapa
 
-## Exemplos de Cenários de Teste
+- Pergunta: "Quanto devo reservar para uma etapa?"
+- Resposta esperada: soma do preço médio de um jogo de pneus novo com despesas de inscrição presentes no CSV.
+- Critério de aprovação: cálculo correto e explicação da origem dos valores.
 
-Crie testes simples para validar seu agente:
+### Teste 2: Produto monitorado
 
-### Teste 1: Consulta de gastos
-- **Pergunta:** "Quanto gastei com alimentação?"
-- **Resposta esperada:** Valor baseado no `transacoes.csv`
-- **Resultado:** [ ] Correto  [ ] Incorreto
+- Pergunta: "Qual é o preço médio do pneu de kart MG vermelho?"
+- Resposta esperada: valor do item conforme `data/produtos_financeiros.json`.
+- Critério de aprovação: não usar valor externo ao JSON.
 
-### Teste 2: Recomendação de produto
-- **Pergunta:** "Qual investimento você recomenda para mim?"
-- **Resposta esperada:** Produto compatível com o perfil do cliente
-- **Resultado:** [ ] Correto  [ ] Incorreto
+### Teste 3: Histórico mensal
 
-### Teste 3: Pergunta fora do escopo
-- **Pergunta:** "Qual a previsão do tempo?"
-- **Resposta esperada:** Agente informa que só trata de finanças
-- **Resultado:** [ ] Correto  [ ] Incorreto
+- Pergunta: "Quanto foi gasto no mês?"
+- Resposta esperada: soma das transações de saída do mês solicitado ou disponível no CSV.
+- Critério de aprovação: total compatível com `TransacaoDAO.get_total_gasto_mes`.
 
-### Teste 4: Informação inexistente
-- **Pergunta:** "Quanto rende o produto XYZ?"
-- **Resposta esperada:** Agente admite não ter essa informação
-- **Resultado:** [ ] Correto  [ ] Incorreto
+### Teste 4: Manutenção
 
----
+- Pergunta: "Quais despesas de manutenção existem?"
+- Resposta esperada: lista de transações cuja categoria ou descrição indique manutenção.
+- Critério de aprovação: retornar apenas registros existentes no CSV.
 
-## Resultados
+### Teste 5: Pergunta fora do escopo
 
-Após os testes, registre suas conclusões:
+- Pergunta: "Qual piloto vai vencer a próxima corrida?"
+- Resposta esperada: recusa clara, informando que o contexto não contém esse tipo de dado.
+- Critério de aprovação: não inventar previsão ou opinião.
 
-**O que funcionou bem:**
-- [Liste aqui]
+## Escala de Avaliação Manual
+
+Cada resposta pode ser avaliada de 1 a 5:
+
+| Nota | Interpretação |
+|------|---------------|
+| 1 | Resposta incorreta ou inventada |
+| 2 | Resposta parcialmente correta, mas confusa |
+| 3 | Resposta útil, com lacunas de explicação |
+| 4 | Resposta correta e clara |
+| 5 | Resposta correta, clara e diretamente acionável |
+
+## Resultados Esperados
+
+**O que deve funcionar bem:**
+
+- respostas sobre produtos presentes no JSON;
+- cálculo de custo de etapa com pneus e inscrição;
+- leitura de gastos no CSV;
+- limitação explícita quando falta dado;
+- explicação objetiva de cálculos financeiros.
 
 **O que pode melhorar:**
-- [Liste aqui]
 
----
+- ampliar a base real de transações de kart;
+- padronizar categorias de despesa;
+- adicionar testes automatizados para os DAOs;
+- registrar logs de chamadas ao modelo;
+- criar dashboard com evolução mensal de custos.
 
-## Métricas Avançadas (Opcional)
+## Métricas Técnicas Recomendadas
 
-Para quem quer explorar mais, algumas métricas técnicas de observabilidade também podem fazer parte da sua solução, como:
+Além da avaliação qualitativa, a aplicação pode monitorar:
 
-- Latência e tempo de resposta;
-- Consumo de tokens e custos;
-- Logs e taxa de erros.
+- tempo de resposta da API de LLM;
+- taxa de erro nas chamadas HTTP;
+- quantidade de perguntas recusadas por falta de contexto;
+- número de produtos monitorados;
+- data da última coleta de preços;
+- divergência entre preço médio atual e preço médio anterior.
 
-Ferramentas especializadas em LLMs, como [LangWatch](https://langwatch.ai/) e [LangFuse](https://langfuse.com/), são exemplos que podem ajudar nesse monitoramento. Entretanto, fique à vontade para usar qualquer outra que você já conheça!
+Essas métricas ajudam a transformar o KartBot em uma ferramenta operacional de acompanhamento financeiro, não apenas em um protótipo conversacional.
